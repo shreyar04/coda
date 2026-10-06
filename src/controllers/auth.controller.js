@@ -5,6 +5,13 @@ const bcrypt = require("bcryptjs");
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const cookieOptions = {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+};
+
 async function registerUser(req, res) {
 
     const { username, email, password, role } = req.body;
@@ -71,10 +78,10 @@ async function registerUser(req, res) {
     const token = jwt.sign({
         id: user._id,
         role: user.role,
-    }, process.env.JWT_SECRET)
+    }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "24h" })
 
 
-    res.cookie("token", token)
+    res.cookie("token", token, cookieOptions)
 
 
     res.status(201).json({
@@ -144,9 +151,9 @@ async function loginUser(req, res) {
     const token = jwt.sign({
         id: user._id,
         role: user.role,
-    }, process.env.JWT_SECRET)
+    }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "24h" })
 
-    res.cookie("token", token)
+    res.cookie("token", token, cookieOptions)
 
 
     res.status(200).json({
@@ -165,7 +172,8 @@ async function loginUser(req, res) {
 }
 
 async function logoutUser(req, res) {
-    res.clearCookie("token")
+    const { maxAge, ...clearOptions } = cookieOptions;
+    res.clearCookie("token", clearOptions)
     res.status(200).json({ message: "User logged out successfully" })
 }
 
