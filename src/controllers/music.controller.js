@@ -111,15 +111,73 @@ async function createAlbum(req, res) {
 
 }
 
-async function getAllMusics(req, res) {
-    const musics = await musicModel
-        .find()
-        .populate("artist", "username email")
+function escapeRegex(text) {
+    return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+}
 
-    res.status(200).json({
+async function getAllMusics(req, res) {
+    const { page, limit, search } = req.query;
+
+    const filter = {};
+
+    if (search !== undefined && typeof search === "string" && search.trim() !== "") {
+        filter.title = { $regex: escapeRegex(search.trim()), $options: "i" };
+    }
+
+    const hasPagination = page !== undefined || limit !== undefined;
+
+    let currentPage;
+    let currentLimit;
+
+    if (hasPagination) {
+        if (page !== undefined) {
+            const parsedPage = parseInt(page, 10);
+            if (isNaN(parsedPage) || parsedPage < 1) {
+                return res.status(400).json({ message: "Invalid page parameter" });
+            }
+            currentPage = parsedPage;
+        } else {
+            currentPage = 1;
+        }
+
+        if (limit !== undefined) {
+            const parsedLimit = parseInt(limit, 10);
+            if (isNaN(parsedLimit) || parsedLimit < 1) {
+                return res.status(400).json({ message: "Invalid limit parameter" });
+            }
+            currentLimit = parsedLimit;
+        } else {
+            currentLimit = 10;
+        }
+    }
+
+    let query = musicModel.find(filter).populate("artist", "username email");
+
+    if (hasPagination) {
+        const skip = (currentPage - 1) * currentLimit;
+        query = query.skip(skip).limit(currentLimit);
+
+        const [musics, total] = await Promise.all([
+            query,
+            musicModel.countDocuments(filter)
+        ]);
+
+        return res.status(200).json({
+            message: "Musics fetched successfully",
+            musics: musics,
+            page: currentPage,
+            limit: currentLimit,
+            total: total,
+            totalPages: Math.ceil(total / currentLimit)
+        });
+    }
+
+    const musics = await query;
+
+    return res.status(200).json({
         message: "Musics fetched successfully",
         musics: musics,
-    })
+    });
 
 }
 
