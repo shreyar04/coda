@@ -21,26 +21,35 @@ async function createMusic(req, res) {
         return res.status(400).json({ message: "Music file is required" });
     }
 
-    const result = await uploadFile(
-        file.buffer,
-        file.originalname
-    )
+    if (!file.buffer || file.buffer.length === 0) {
+        return res.status(400).json({ message: "Music file cannot be empty" });
+    }
 
-    const music = await musicModel.create({
-        uri: result.url,
-        title: title.trim(),
-        artist: req.user.id,
-    })
+    try {
+        const result = await uploadFile(
+            file.buffer,
+            file.originalname
+        )
 
-    res.status(201).json({
-        message: "Music created successfully",
-        music: {
-            id: music._id,
-            uri: music.uri,
-            title: music.title,
-            artist: music.artist,
-        }
-    })
+        const music = await musicModel.create({
+            uri: result.url,
+            title: title.trim(),
+            artist: req.user.id,
+        })
+
+        return res.status(201).json({
+            message: "Music created successfully",
+            music: {
+                id: music._id,
+                uri: music.uri,
+                title: music.title,
+                artist: music.artist,
+            }
+        })
+    } catch (err) {
+        console.error("Storage upload error:", err);
+        return res.status(500).json({ message: "Failed to upload music file" });
+    }
 
 }
 

@@ -1,5 +1,9 @@
 const { ImageKit, toFile } = require("@imagekit/nodejs");
 
+if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === undefined) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
 const ImageKitClient = new ImageKit({
     privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
 });
