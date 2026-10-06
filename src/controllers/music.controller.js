@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const musicModel = require("../models/music.model");
 const albumModel = require("../models/album.model");
 const { uploadFile } = require("../services/storage.service")
@@ -8,10 +9,18 @@ async function createMusic(req, res) {
     const { title } = req.body;
     const file = req.file;
 
+    if (!title) {
+        return res.status(400).json({ message: "Title is required" });
+    }
+
+    if (!file) {
+        return res.status(400).json({ message: "Music file is required" });
+    }
+
     const result = await uploadFile(
-    file.buffer,
-    file.originalname
-)
+        file.buffer,
+        file.originalname
+    )
 
     const music = await musicModel.create({
         uri: result.url,
@@ -35,10 +44,36 @@ async function createAlbum(req, res) {
 
     const { title, musics } = req.body;
 
+    if (!title) {
+        return res.status(400).json({ message: "Title is required" });
+    }
+
+    if (musics && musics.length > 0) {
+        const musicIds = Array.isArray(musics) ? musics : [musics];
+
+        for (const id of musicIds) {
+            if (!mongoose.Types.ObjectId.isValid(id)) {
+                return res.status(400).json({ message: "Invalid music ID" });
+            }
+        }
+
+        const uniqueIds = [...new Set(musicIds.map(id => id.toString()))];
+        const musicRecords = await musicModel.find({ _id: { $in: uniqueIds } });
+
+        if (musicRecords.length !== uniqueIds.length) {
+            return res.status(404).json({ message: "One or more music tracks not found" });
+        }
+
+        const notOwned = musicRecords.some(m => m.artist.toString() !== req.user.id.toString());
+        if (notOwned) {
+            return res.status(403).json({ message: "You don't have permission to add music that is not yours" });
+        }
+    }
+
     const album = await albumModel.create({
         title,
         artist: req.user.id,
-        musics: musics,
+        musics: musics || [],
     })
 
     res.status(201).json({
@@ -82,7 +117,15 @@ async function getAlbumById(req, res) {
 
     const albumId = req.params.albumId;
 
+    if (!mongoose.Types.ObjectId.isValid(albumId)) {
+        return res.status(400).json({ message: "Invalid album ID" });
+    }
+
     const album = await albumModel.findById(albumId).populate("artist", "username email").populate("musics")
+
+    if (!album) {
+        return res.status(404).json({ message: "Album not found" });
+    }
 
     return res.status(200).json({
         message: "Album fetched successfully",

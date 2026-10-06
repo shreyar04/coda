@@ -5,7 +5,11 @@ const bcrypt = require("bcryptjs");
 
 async function registerUser(req, res) {
 
-    const { username, email, password, role = "user" } = req.body;
+    const { username, email, password, role } = req.body;
+
+    if (role === "artist" || (role && role !== "user")) {
+        return res.status(400).json({ message: "Cannot register as an artist" });
+    }
 
     const isUserAlreadyExists = await userModel.findOne({
         $or: [
@@ -24,7 +28,7 @@ async function registerUser(req, res) {
         username,
         email,
         password: hash,
-        role
+        role: "user"
     })
 
     const token = jwt.sign({
