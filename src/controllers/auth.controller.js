@@ -3,18 +3,55 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
 
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 async function registerUser(req, res) {
 
     const { username, email, password, role } = req.body;
 
-    if (role === "artist" || (role && role !== "user")) {
-        return res.status(400).json({ message: "Cannot register as an artist" });
+    if (!username || typeof username !== "string" || username.trim() === "") {
+        return res.status(400).json({ message: "Username is required" });
     }
+
+    if (username.trim().length < 3) {
+        return res.status(400).json({ message: "Username must be at least 3 characters long" });
+    }
+
+    if (!email || typeof email !== "string" || email.trim() === "") {
+        return res.status(400).json({ message: "Email is required" });
+    }
+
+    if (!emailRegex.test(email.trim())) {
+        return res.status(400).json({ message: "Invalid email format" });
+    }
+
+    if (!password || typeof password !== "string") {
+        return res.status(400).json({ message: "Password is required" });
+    }
+
+    if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters long" });
+    }
+
+    if (role !== undefined) {
+        if (typeof role !== "string") {
+            return res.status(400).json({ message: "Invalid role" });
+        }
+        if (role === "artist") {
+            return res.status(400).json({ message: "Cannot register as an artist" });
+        }
+        if (role !== "user") {
+            return res.status(400).json({ message: "Invalid role" });
+        }
+    }
+
+    const trimmedUsername = username.trim();
+    const trimmedEmail = email.trim().toLowerCase();
 
     const isUserAlreadyExists = await userModel.findOne({
         $or: [
-            { username },
-            { email }
+            { username: trimmedUsername },
+            { email: trimmedEmail }
         ]
     })
 
@@ -25,8 +62,8 @@ async function registerUser(req, res) {
     const hash = await bcrypt.hash(password, 10)
 
     const user = await userModel.create({
-        username,
-        email,
+        username: trimmedUsername,
+        email: trimmedEmail,
         password: hash,
         role: "user"
     })
@@ -55,23 +92,50 @@ async function registerUser(req, res) {
 
 async function loginUser(req, res) {
 
-    const { username, email, password } = req.body;
+    const { username, email, password, role } = req.body;
 
+    const hasUsername = username && typeof username === "string" && username.trim() !== "";
+    const hasEmail = email && typeof email === "string" && email.trim() !== "";
+
+    if (!hasUsername && !hasEmail) {
+        return res.status(400).json({ message: "Username or email is required" });
+    }
+
+    if (hasEmail && !emailRegex.test(email.trim())) {
+        return res.status(400).json({ message: "Invalid email format" });
+    }
+
+    if (!password || typeof password !== "string" || password.trim() === "") {
+        return res.status(400).json({ message: "Password is required" });
+    }
+
+    if (role !== undefined) {
+        if (typeof role !== "string" || !["user", "artist"].includes(role)) {
+            return res.status(400).json({ message: "Invalid role" });
+        }
+    }
+
+    const query = [];
+    if (hasUsername) {
+        query.push({ username: username.trim() });
+    }
+    if (hasEmail) {
+        query.push({ email: email.trim().toLowerCase() });
+    }
 
     const user = await userModel.findOne({
-        $or: [
-            { username },
-            { email }
-        ]
+        $or: query
     })
 
     if (!user) {
         return res.status(401).json({ message: "Invalid credentials" })
     }
 
+    if (role && user.role !== role) {
+        return res.status(401).json({ message: "Invalid credentials" })
+    }
 
     const isPasswordValid = await bcrypt.compare(password, user.password)
-
 
     if (!isPasswordValid) {
         return res.status(401).json({ message: "Invalid credentials" })

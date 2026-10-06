@@ -9,7 +9,11 @@ async function createMusic(req, res) {
     const { title } = req.body;
     const file = req.file;
 
-    if (!title) {
+    if (!req.user?.id || !mongoose.Types.ObjectId.isValid(req.user.id)) {
+        return res.status(400).json({ message: "Invalid artist ID" });
+    }
+
+    if (!title || typeof title !== "string" || title.trim() === "") {
         return res.status(400).json({ message: "Title is required" });
     }
 
@@ -24,7 +28,7 @@ async function createMusic(req, res) {
 
     const music = await musicModel.create({
         uri: result.url,
-        title,
+        title: title.trim(),
         artist: req.user.id,
     })
 
@@ -44,29 +48,37 @@ async function createAlbum(req, res) {
 
     const { title, musics } = req.body;
 
-    if (!title) {
+    if (!req.user?.id || !mongoose.Types.ObjectId.isValid(req.user.id)) {
+        return res.status(400).json({ message: "Invalid artist ID" });
+    }
+
+    if (!title || typeof title !== "string" || title.trim() === "") {
         return res.status(400).json({ message: "Title is required" });
     }
 
-    if (musics && musics.length > 0) {
-        const musicIds = Array.isArray(musics) ? musics : [musics];
+    if (musics !== undefined) {
+        if (!Array.isArray(musics)) {
+            return res.status(400).json({ message: "Musics must be an array" });
+        }
 
-        for (const id of musicIds) {
-            if (!mongoose.Types.ObjectId.isValid(id)) {
+        for (const id of musics) {
+            if (!id || !mongoose.Types.ObjectId.isValid(id)) {
                 return res.status(400).json({ message: "Invalid music ID" });
             }
         }
 
-        const uniqueIds = [...new Set(musicIds.map(id => id.toString()))];
-        const musicRecords = await musicModel.find({ _id: { $in: uniqueIds } });
+        if (musics.length > 0) {
+            const uniqueIds = [...new Set(musics.map(id => id.toString()))];
+            const musicRecords = await musicModel.find({ _id: { $in: uniqueIds } });
 
-        if (musicRecords.length !== uniqueIds.length) {
-            return res.status(404).json({ message: "One or more music tracks not found" });
-        }
+            if (musicRecords.length !== uniqueIds.length) {
+                return res.status(404).json({ message: "One or more music tracks not found" });
+            }
 
-        const notOwned = musicRecords.some(m => m.artist.toString() !== req.user.id.toString());
-        if (notOwned) {
-            return res.status(403).json({ message: "You don't have permission to add music that is not yours" });
+            const notOwned = musicRecords.some(m => m.artist.toString() !== req.user.id.toString());
+            if (notOwned) {
+                return res.status(403).json({ message: "You don't have permission to add music that is not yours" });
+            }
         }
     }
 
