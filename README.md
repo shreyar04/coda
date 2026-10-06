@@ -1,4 +1,4 @@
-# Coda (Melodify) Backend API
+# 🎵 Coda
 
 [![Node.js](https://img.shields.io/badge/Node.js-v20+-green.svg?logo=node.js)](https://nodejs.org/)
 [![Express](https://img.shields.io/badge/Express-5.2.1-black.svg?logo=express)](https://expressjs.com/)
@@ -6,7 +6,7 @@
 [![ImageKit](https://img.shields.io/badge/ImageKit-Cloud%20Media-blue.svg)](https://imagekit.io/)
 [![Tests](https://img.shields.io/badge/Tests-57%2F57%20Passing-brightgreen.svg)](file:///d:/coda/test)
 
-A secure, high-performance RESTful backend API for **Coda (Melodify)**, a music streaming and media management platform. Built with Node.js, Express 5, and MongoDB, featuring hardened JWT authentication, role-based access control, safe media streaming uploads via ImageKit, pagination, case-insensitive search, and centralized error handling.
+A role-based music streaming backend built with **Node.js, Express 5 and MongoDB**. Artists can upload audio tracks and organize them into albums, while users can browse, search and paginate through the music catalogue. The backend uses JWT authentication with hardened HTTP-only cookies, input validation, secure file uploads and automated testing.
 
 ---
 
@@ -36,82 +36,48 @@ A secure, high-performance RESTful backend API for **Coda (Melodify)**, a music 
 
 ## Architecture Overview
 
-### System Architecture
+### Architecture
+
+Coda follows a modular backend architecture that separates routes, middleware, controllers, database models and external services. Every request passes through routing and middleware (authentication, role check, validation and, for uploads, file handling) before reaching a controller. Controllers talk to MongoDB for data and to ImageKit for audio files, then return a JSON response.
 
 ```mermaid
 flowchart TD
-    Client["Client (Web / Mobile / Postman)"]
+    Client["Client / Postman"] --> Express["Express API"]
+    Express --> Routes["Routes"]
+    Routes --> Middleware["Middleware<br/>auth · role check · validation · upload"]
+    Middleware --> Controllers["Controllers"]
+    Controllers --> MongoDB[("MongoDB")]
+    Controllers --> ImageKit["ImageKit"]
+    Controllers --> Response["JSON Response"]
 
-    subgraph ExpressApp ["Express 5 Application Pipeline"]
-        Parser["cookieParser() & express.json()"]
-        AuthMiddleware["Auth Middleware (authUser / authArtist)"]
-        UploadMiddleware["Upload Middleware (Multer MemoryStorage)"]
-
-        AuthCtrl["Auth Controller"]
-        MusicCtrl["Music Controller"]
-
-        ErrorHandler["Centralized Error & 404 Handlers"]
-    end
-
-    subgraph ExternalServices ["External Services & Storage"]
-        MongoDB[("MongoDB Atlas Database")]
-        ImageKit["ImageKit Cloud Storage"]
-    end
-
-    Client -->|"HTTP Requests (JSON / Cookies / Multipart)"| Parser
-    Parser --> AuthCtrl
-    Parser --> AuthMiddleware
-    AuthMiddleware --> UploadMiddleware
-    UploadMiddleware --> MusicCtrl
-
-    AuthCtrl -->|"Bcrypt & User Model"| MongoDB
-    MusicCtrl -->|"Track & Album Model Queries"| MongoDB
-    MusicCtrl -->|"Stream Buffer Upload"| ImageKit
-
-    AuthCtrl -.->|"Handled Errors"| ErrorHandler
-    MusicCtrl -.->|"Handled Errors"| ErrorHandler
-    UploadMiddleware -.->|"Upload Limit / MIME Errors"| ErrorHandler
-    ErrorHandler -->|"Standardized JSON Errors"| Client
+    classDef node fill:#0b2a4a,stroke:#3b82f6,stroke-width:1px,color:#bfdbfe;
+    class Client,Express,Routes,Middleware,Controllers,MongoDB,ImageKit,Response node;
 ```
 
-### Authentication & Authorization Flow
+---
+
+### Authentication & Authorization
+
+Coda uses **JWT-based authentication** with tokens stored in hardened HTTP-only cookies.
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    actor User as Client
-    actor Artist as Artist Client
-    participant API as Express API
+    actor User
+    participant API
     participant DB as MongoDB
 
-    Note over User, API: 1. User Registration Flow
-    User->>API: POST /api/auth/register (username, email, password)
-    API->>API: Validate input (rejects artist self-assignment)
-    API->>DB: Check uniqueness and save user (role user)
-    API-->>User: 201 Created + HttpOnly Cookie (token, 24h exp)
+    User->>API: Login (email or username + password)
+    API->>DB: Find user
+    DB-->>API: User record
+    API->>API: Verify password with bcrypt
+    API->>API: Generate JWT (24h expiry)
+    API-->>User: HttpOnly, SameSite=Strict cookie
 
-    Note over User, API: 2. Accessing Protected Music Catalog
-    User->>API: GET /api/music/ (Cookie: token)
-    API->>API: authUser verifies JWT and validates ObjectId
-    alt Valid Role (user or artist)
-        API->>DB: Fetch music tracks (optional search and pagination)
-        API-->>User: 200 OK (Musics Array)
-    else Invalid or Missing Token
-        API-->>User: 401 Unauthorized
-    end
-
-    Note over Artist, API: 3. Artist Upload Flow
-    Artist->>API: POST /api/music/upload (Multipart audio + Title)
-    API->>API: authArtist verifies JWT & checks role is artist
-    alt Non-Artist Account
-        API-->>Artist: 403 Forbidden (Access Denied)
-    else Artist Role
-        API->>API: uploadMusicMiddleware validates MIME and size (up to 15MB)
-        API->>DB: Save Track (artist: req.user.id)
-        API-->>Artist: 201 Created
-    end
+    User->>API: Protected request (cookie sent automatically)
+    API->>API: Verify JWT signature and expiry
+    API->>API: Check role (user / artist)
+    API-->>User: Authorized response (401 / 403 if rejected)
 ```
-
 ---
 
 ## Features
@@ -217,8 +183,8 @@ NODE_ENV=development
 
 1. Clone the repository and navigate to the project directory:
    ```bash
-   git clone https://github.com/shreyar04/melodify.git
-   cd melodify
+   git clone https://github.com/shreyar04/code.git
+   cd coda
    ```
 
 2. Install dependencies:
@@ -501,22 +467,13 @@ All **57 tests** pass with 100% success rate.
 
 ---
 
-## Known Limitations & Roadmap
+## Author
 
-### Known Limitations
-- **Single File Upload**: Currently, `/api/music/upload` accepts a single audio file per request.
-- **Audio Transcoding**: Uploaded audio tracks are stored in their native uploaded formats without server-side transcoding (e.g. HLS streaming or variable bitrates).
-- **Public Catalog**: Albums and tracks are publicly browsable by any authenticated user; granular private track permissions are not currently implemented.
+**Shreya Rawat**
 
-### Future Roadmap
-- [ ] **Stream Tokenization**: Time-limited signed URLs for streaming media files.
-- [ ] **Playlist System**: User-curated custom playlists with collaborative editing.
-- [ ] **Audio Waveform Generation**: Waveform peak extraction during upload for waveform visualizations.
-- [ ] **Social Features**: Artist followings, user favorites, and track play-count tracking.
-- [ ] **Rate Limiting**: Rate-limiting middleware (e.g. `express-rate-limit`) on authentication and upload endpoints.
+[GitHub](https://github.com/shreyar04)
 
 ---
 
-## License
+⭐ If you find this project useful, consider giving it a star!
 
-This project is licensed under the [ISC License](file:///d:/coda/package.json).
