@@ -29,8 +29,6 @@ A role-based music streaming backend built with **Node.js, Express 5 and MongoDB
 8. [Request & Response Examples](#request--response-examples)
 9. [Security & Design Decisions](#security--design-decisions)
 10. [Testing](#testing)
-11. [Known Limitations & Roadmap](#known-limitations--roadmap)
-12. [License](#license)
 
 ---
 
